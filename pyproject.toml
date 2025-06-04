@@ -87,10 +87,8 @@ report_crds_context = "pytest_jwst.plugin"
 [project.optional-dependencies]
 docs = [
     "matplotlib",
-    "sphinx",
-    "sphinx-astropy",
-    "sphinx-automodapi",
-    "sphinx-rtd-theme",
+    "sphinx-astropy[confv2]>=1.9.1",
+    "sphinx_design",
 ]
 sdp = [
     "jplephem>=2.9",
