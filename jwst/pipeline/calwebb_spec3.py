@@ -249,7 +249,6 @@ class Spec3Pipeline(Pipeline):
                     except AttributeError:
                         pass
 
-            # Do 1-D spectral extraction
             if exptype in SLITLESS_TYPES:
                 # interpolate pixels that have a NaN value or are flagged
                 # as DO_NOT_USE or NON_SCIENCE
@@ -261,6 +260,7 @@ class Spec3Pipeline(Pipeline):
                     # instead run photom on the extract_1d results and save
                     # those instead.
 
+                    # Do 1-D spectral extraction
                     self.extract_1d.save_results = False
                     result = self.extract_1d.run(result)
 
@@ -287,8 +287,9 @@ class Spec3Pipeline(Pipeline):
                     if not comb_complete:
                         continue
                     # add metadata that only WFSS wants
-                    comb.spec[0].source_ra = result.spec[0].spec_table["SOURCE_RA"][0]
-                    comb.spec[0].source_dec = result.spec[0].spec_table["SOURCE_DEC"][0]
+                    # FIXME: Decide if we still need this.
+                    # comb.spec[0].source_ra = result.spec[0].spec_table["SOURCE_RA"][0]
+                    # comb.spec[0].source_dec = result.spec[0].spec_table["SOURCE_DEC"][0]
                     wfss_comb.append(comb)
 
             elif resample_complete is not None and resample_complete.upper() == "COMPLETE":
