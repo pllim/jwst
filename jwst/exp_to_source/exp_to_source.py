@@ -154,14 +154,8 @@ def _expand_wfss_table(spec):
                 spec_table[col_name] = spec_row[col_name][:n_elements]
             else:
                 spec_table[col_name] = spec_row[col_name]
+        new_spec.update(spec)
         new_spec.spec_table = spec_table
-        new_spec.filename = spec.filename
-        new_spec.group_id = spec.group_id
-        new_spec.dispersion_direction = spec.dispersion_direction
-        new_spec.spectral_order = spec.spectral_order
-        new_spec.exposure_time = spec.exposure_time
-        new_spec.integration_time = spec.integration_time
-        new_spec.s_region = spec.s_region
         copy_spec_metadata(spec, new_spec)
         copy_column_units(spec, new_spec)
 
@@ -186,8 +180,8 @@ def wfss_multispec_to_source(inputs):
 
     Returns
     -------
-    output_list : list[MultiSpecModel]
-        List of `~stdatamodels.jwst.datamodels.MultiSpecModel` objects,
+    output_list : list[WFSSMultiSpecModel]
+        List of `~stdatamodels.jwst.datamodels.WFSSMultiSpecModel` objects,
         one for each source ID in the input model.
     """
     # first extract all spectra as SpecModels in a flat list
@@ -215,7 +209,7 @@ def wfss_multispec_to_source(inputs):
     spec_list = np.array(spec_list)
     output_list = []
     for source_id in unique_source_ids:
-        multispec = dm.MultiSpecModel()
+        multispec = dm.WFSSMultiSpecModel()
         # BUG: currently there is no infrastructure for handling per-exposure weights
         # This is also a problem on main
         multispec.meta.exposure.exposure_time = exposure_time

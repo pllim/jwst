@@ -181,8 +181,8 @@ def make_wfss_multiexposure_spec3(input_list):
 
     Parameters
     ----------
-    input_list : list[MultiSpecModel]
-        List of `~stdatamodels.jwst.datamodels.MultiSpecModel` objects to be combined.
+    input_list : list[WFSSMultiSpecModel]
+        List of `~stdatamodels.jwst.datamodels.WFSSMultiSpecModel` objects to be combined.
 
     Returns
     -------
@@ -253,13 +253,8 @@ def make_wfss_multiexposure_spec3(input_list):
         # copy units from the example specmodel, overriding the schema defaults where applicable
         copy_column_units(example_spec, ext)
         # copy metadata
-        ext.filename = example_spec.filename
+        ext.update(example_spec)
         ext.group_id = exposure_number
-        ext.dispersion_direction = example_spec.dispersion_direction
-        ext.spectral_order = example_spec.spectral_order
-        ext.exposure_time = example_spec.exposure_time
-        ext.integration_time = example_spec.integration_time
-        ext.s_region = example_spec.s_region
         output_x1d.spec.append(ext)
 
     output_x1d.update(input_list[0], only="PRIMARY")
