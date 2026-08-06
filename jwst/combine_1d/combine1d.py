@@ -5,7 +5,6 @@ import numpy as np
 from stdatamodels.jwst import datamodels
 
 from jwst.datamodels import ModelContainer
-from jwst.datamodels.utils.flat_multispec import expand_flat_spec
 from jwst.extract_1d.spec_wcs import create_spectral_wcs
 
 log = logging.getLogger(__name__)
@@ -21,7 +20,6 @@ SPECMETA_ATTRIBUTES = [
 ]
 
 __all__ = [
-    "InputSpectrumModel",
     "OutputSpectrumModel",
     "count_input",
     "compute_output_wl",
@@ -29,124 +27,6 @@ __all__ = [
     "combine_1d_spectra",
     "check_monotonic",
 ]
-
-
-class InputSpectrumModel:
-    """
-    Model an input spectrum.
-
-    Parameters
-    ----------
-    ms : `~stdatamodels.jwst.datamodels.JwstDataModel`, \
-         `~stdatamodels.jwst.datamodels.MultiSpecModel`, or \
-         `~stdatamodels.jwst.datamodels.SpecModel`
-        This is used to get the integration time.
-
-    spec : `~stdatamodels.jwst.datamodels.JwstDataModel` or \
-           `~stdatamodels.jwst.datamodels.SpecModel` table
-        The table containing columns "wavelength" and "flux".
-        The ``ms`` object may contain more than one spectrum, but ``spec``
-        should be just one of those.
-
-    exptime_key : str
-        A string identifying which keyword to use to get the exposure
-        time, which is used as a weight; or "unit_weight", which means
-        to use ``weight = 1``.
-
-    Attributes
-    ----------
-    wavelength : ndarray
-        Input wavelength.
-    flux : ndarray
-        Input flux.
-    flux_error : ndarray
-        Input error on the flux.
-    surf_bright : ndarray
-        Input surface brightness.
-    sb_error : ndarray
-        Input error on the surface brightness.
-    dq : ndarray
-        Input DQ array.
-    nelem : int
-        Number of spectral elements.
-    weight : ndarray
-        Weight value for each spectral element.
-    unit_weight : bool
-        Flag to indicate uniform weights are used.
-    right_ascension : ndarray
-        RA value for each spectral element.
-    declination : ndarray
-        Dec value for each spectral element.
-    name : str
-        Slit name for the spectrum.
-    source_id : int
-        Source ID for the spectrum.
-    source_type : str
-        Source type for the spectrum.
-    source_ra : float
-        Right ascension of the source.
-    source_dec : float
-        Declination of the source.
-    dispersion_direction : str
-        Dispersion direction for the spectrum.
-    flux_unit : str
-        Unit for the flux values.
-    sb_unit : str
-        Unit for the surface brightness values.
-    """
-
-    def __init__(self, ms, spec, exptime_key):
-        self.wavelength = spec.spec_table.field("wavelength")
-        self.flux = spec.spec_table.field("flux")
-        self.flux_error = spec.spec_table.field("flux_error")
-        self.surf_bright = spec.spec_table.field("surf_bright")
-        self.sb_error = spec.spec_table.field("sb_error")
-        self.dq = spec.spec_table.field("dq")
-        self.nelem = self.wavelength.shape[0]
-        self.unit_weight = False  # may be reset below
-        self.right_ascension = np.zeros_like(self.wavelength)
-        self.declination = np.zeros_like(self.wavelength)
-        self.name = spec.name
-        for attr in SPECMETA_ATTRIBUTES:
-            setattr(self, attr, getattr(spec, attr))
-        self.flux_unit = spec.spec_table.columns["flux"].unit
-        self.sb_unit = spec.spec_table.columns["surf_bright"].unit
-
-        self.weight = np.ones_like(self.wavelength)
-        if exptime_key == "integration_time":
-            self.weight *= ms.meta.exposure.integration_time
-        elif exptime_key == "exposure_time":
-            self.weight *= ms.meta.exposure.exposure_time
-        elif exptime_key == "unit_weight":
-            self.unit_weight = True
-        else:
-            raise RuntimeError(f"Don't understand exptime_key = '{exptime_key}'")
-
-        try:
-            self.right_ascension[:], self.declination[:], _ = spec.meta.wcs(0.0)
-        except AttributeError:
-            self.right_ascension[:] = ms.meta.target.ra
-            self.declination[:] = ms.meta.target.dec
-            # This exception is hit for NIRISS and NIRCam WFSS data,
-            # for which it doesn't matter anyway, since the RA and Dec are not used
-            # in any meaningful way to combine the spectra. A future refactor should
-            # make it so the WCS is not expected in the input spectra for those modes.
-            log.debug("There is no WCS in the input. Getting RA, Dec from target metadata.")
-
-    def close(self):
-        """Set data attributes to null values."""
-        self.wavelength = None
-        self.flux = None
-        self.flux_error = None
-        self.surf_bright = None
-        self.sb_error = None
-        self.dq = None
-        self.nelem = 0
-        self.weight = 1.0
-        self.unit_weight = False
-        self.right_ascension = None
-        self.declination = None
-        self.source_id = None
 
 
 class OutputSpectrumModel:
@@ -201,7 +81,7 @@ class OutputSpectrumModel:
 
         Parameters
         ----------
-        input_spectra : list of `~jwst.combine_1d.combine1d.InputSpectrumModel`
+        input_spectra : list
             List of input spectra.
         """
         (wl, n_input_spectra) = count_input(input_spectra)
@@ -212,7 +92,7 @@ class OutputSpectrumModel:
             input_spectra[0].right_ascension[0], input_spectra[0].declination[0], self.wavelength
         )
 
-    def accumulate_sums(self, input_spectra, sigma_clip=None):
+    def accumulate_sums(self, input_spectra, exptime_key, sigma_clip=None):
         """
         Compute a weighted sum of all the input spectra.
 
@@ -234,8 +114,12 @@ class OutputSpectrumModel:
 
         Parameters
         ----------
-        input_spectra : list of `~jwst.combine_1d.combine1d.InputSpectrumModel`
+        input_spectra : list
             List of input spectra.
+        exptime_key : str
+            A string identifying which keyword to use to get the exposure
+            time, which is used as a weight; or "unit_weight", which means
+            to use ``weight = 1``.
         sigma_clip : float, optional
             Factor for clipping outliers in spectral combination.
         """
@@ -256,6 +140,16 @@ class OutputSpectrumModel:
         sb_error = np.zeros((nspec, nelem), dtype=np.float64)
         weight = np.zeros((nspec, nelem), dtype=np.float64)
         count = np.zeros((nspec, nelem), dtype=np.float64)
+
+        # For now, weight is scalar based on exptime_key
+        # that is already validated elsewhere.
+        # Cannot use np.fill() shortcut because weight is summed later.
+        if exptime_key == "integration_time":
+            scalar_weight = ms.meta.exposure.integration_time
+        elif exptime_key == "exposure_time":
+            scalar_weight = ms.meta.exposure.exposure_time
+        else:  # "unit_weight"
+            scalar_weight = 1.0
 
         self.flux_unit = input_spectra[0].flux_unit
         self.sb_unit = input_spectra[0].sb_unit
@@ -295,7 +189,7 @@ class OutputSpectrumModel:
                 flux_error[s, k] = in_spec.flux_error[i]
                 surf_bright[s, k] = in_spec.surf_bright[i]
                 sb_error[s, k] = in_spec.sb_error[i]
-                weight[s, k] = in_spec.weight[i]
+                weight[s, k] = scalar_weight
                 count[s, k] = 1.0
 
         (flux, flux_error, surf_bright, sb_error, weight, count) = self.combine_spectra(
@@ -482,7 +376,7 @@ def count_input(input_spectra):
 
     Parameters
     ----------
-    input_spectra : list of `~jwst.combine_1d.combine1d.InputSpectrumModel`
+    input_spectra : list
         List of input spectra.
 
     Returns
@@ -701,7 +595,7 @@ def check_exptime(exptime_key):
     return exptime_key
 
 
-def _read_input_spectra(input_model, exptime_key, input_spectra):
+def _read_input_spectra(input_model, input_spectra):
     """
     Read input spectra from a datamodel.
 
@@ -711,11 +605,7 @@ def _read_input_spectra(input_model, exptime_key, input_spectra):
                   `~stdatamodels.jwst.datamodels.TSOMultiSpecModel`, or \
                   `~stdatamodels.jwst.datamodels.MRSSpecModel`
         A datamodel with a ``spec`` attribute, containing spectra.
-        If `~stdatamodels.jwst.datamodels.TSOMultiSpecModel`,
-        integrations in the spectral table rows
-        are expanded into separate spectra.
-    exptime_key : str
-        Exposure time key to use for weighting.
+
     input_spectra : dict
         Dictionary to hold input spectra, keyed by spectral order;
         Updated in place.
@@ -732,8 +622,6 @@ def _read_input_spectra(input_model, exptime_key, input_spectra):
     """
     if not hasattr(input_model, "spec"):
         raise TypeError(f"Invalid input datamodel: {type(input_model)}")
-    if isinstance(input_model, datamodels.TSOMultiSpecModel):
-        spectra = expand_flat_spec(input_model).spec
     else:
         spectra = input_model.spec
     for in_spec in spectra:
@@ -762,7 +650,7 @@ def _read_input_spectra(input_model, exptime_key, input_spectra):
         spectral_order = in_spec.spectral_order
         if spectral_order not in input_spectra:
             input_spectra[spectral_order] = []
-        input_spectra[spectral_order].append(InputSpectrumModel(input_model, in_spec, exptime_key))
+        input_spectra[spectral_order].append(in_spec)
     return input_spectra
 
 
@@ -800,9 +688,9 @@ def combine_1d_spectra(input_model, exptime_key, sigma_clip=None):
     output_spectra = {}
     if isinstance(input_model, ModelContainer):
         for ms in input_model:
-            _read_input_spectra(ms, exptime_key, input_spectra)
+            _read_input_spectra(ms, input_spectra)
     else:
-        _read_input_spectra(input_model, exptime_key, input_spectra)
+        _read_input_spectra(input_model, input_spectra)
 
     if len(input_spectra) == 0:
         log.error("No valid input spectra found for source. Skipping.")
@@ -812,7 +700,9 @@ def combine_1d_spectra(input_model, exptime_key, sigma_clip=None):
     for order in input_spectra:
         output_spectra[order] = OutputSpectrumModel()
         output_spectra[order].assign_wavelengths(input_spectra[order])
-        output_spectra[order].accumulate_sums(input_spectra[order], sigma_clip=sigma_clip)
+        output_spectra[order].accumulate_sums(
+            input_spectra[order], exptime_key, sigma_clip=sigma_clip
+        )
 
     output_model = datamodels.MultiCombinedSpecModel()
 
