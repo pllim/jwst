@@ -674,13 +674,15 @@ def combine_1d_spectra(input_model, exptime_key, sigma_clip=None):
         which is used as a weight when combining spectra.  The value should
         be one of:  "exposure_time" (the default), "integration_time",
         or "unit_weight".
+    sigma_clip : float or None, optional
+        Factor for clipping outliers in spectral combination.
 
     Returns
     -------
     output_model : `~stdatamodels.jwst.datamodels.MultiCombinedSpecModel`
         A combined spectra datamodel.
     """
-    log.debug(f"Using exptime_key = {exptime_key}.")
+    log.debug(f"Using exptime_key = {exptime_key}")
 
     exptime_key = check_exptime(exptime_key)
 
