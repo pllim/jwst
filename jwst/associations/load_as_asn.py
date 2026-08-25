@@ -43,7 +43,7 @@ class LoadAsAssociation(dict):
     def load(
         cls,
         obj,
-        meta=DEFAULT_ASN_META,
+        meta=None,
         registry=AssociationRegistry,
         rule=Association,
         product_name_func=None,
@@ -55,6 +55,10 @@ class LoadAsAssociation(dict):
         ----------
         obj : Association, str, dict, Datamodel, [str[,...]], [Datamodel[,...]]
             The obj to return as an association.
+
+        meta : dict or None
+            Metadata to attach to the association. If not given,
+            a built-in default is used.
 
         registry : AssociationRegistry
             The registry to use to load an association file with.
@@ -79,6 +83,10 @@ class LoadAsAssociation(dict):
         filename is added here, if such a file was passed in. Otherwise
         a default value is given.
         """
+        # This is to avoid Sphinx build from throwing warning.
+        if meta is None:
+            meta = DEFAULT_ASN_META
+
         if isinstance(obj, (str, Path)):
             try:
                 with Path(obj).open() as fp:
