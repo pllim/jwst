@@ -64,6 +64,7 @@ Complete Developer API
 
 .. automodapi:: jwst.associations.lib.association_rules
    :no-inheritance-diagram:
+   :include:
 
 .. automodapi:: jwst.associations.lib.callback_registry
    :no-inheritance-diagram:
