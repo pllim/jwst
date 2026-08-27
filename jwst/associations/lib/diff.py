@@ -401,7 +401,7 @@ def compare_product_membership(left, right, strict_expname=True):
 
     Otherwise, the following errors will be raised:
 
-    - `~jwst.associations.lib.diff.DuplicateMemberError`:
+    - `~jwst.associations.lib.diff.DuplicateMembersError`:
       A member exists multiple times in the member list.
 
     - `~jwst.associations.lib.diff.MemberLengthDifferenceError`:
