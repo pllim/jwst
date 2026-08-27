@@ -28,7 +28,7 @@ class Main:
         The command line arguments. Can be one of:
 
         - `None`: Command line arguments are then used.
-        -  A list of strings which create the command line
+        - A list of strings which create the command line
           with the similar structure as ``sys.argv``.
 
     pool : None or `~jwst.associations.pool.AssociationPool`
