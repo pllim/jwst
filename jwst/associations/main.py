@@ -28,8 +28,8 @@ class Main:
         The command line arguments. Can be one of:
 
         - `None`: Command line arguments are then used.
-        - List of str: A list of strings which create the command line
-          with the similar structure as ``sys.argv``
+        -  A list of strings which create the command line
+          with the similar structure as ``sys.argv``.
 
     pool : None or `~jwst.associations.pool.AssociationPool`
         If `None`, a pool file must be specified in the ``args``.
@@ -64,8 +64,8 @@ class Main:
             The command line arguments. Can be one of:
 
             - `None`: Command line arguments are then used.
-            - List of str: A list of strings which create the command line
-              with the similar structure as ``sys.argv``
+            - A list of strings which create the command line
+              with the similar structure as ``sys.argv``.
 
         pool : None or `~jwst.associations.pool.AssociationPool`
             If `None`, a pool file must be specified in the ``args``.
@@ -73,7 +73,7 @@ class Main:
 
         Returns
         -------
-        generator : Main
+        generator : `Main`
             A fully executed association generator.
         """
         generator_cli = cls(args=args, pool=pool)
@@ -112,8 +112,8 @@ class Main:
             The command line arguments. Can be one of:
 
             - `None`: Command line arguments are then used.
-            - List of str: A list of strings which create the command line
-              with the similar structure as ``sys.argv``
+            - A list of strings which create the command line
+              with the similar structure as ``sys.argv``.
 
         pool : None or `~jwst.associations.pool.AssociationPool`
             If `None`, a pool file must be specified in the ``args``.
@@ -205,7 +205,7 @@ class Main:
             If a string, spaces separate the arguments.
             If None, ``sys.argv`` is used.
 
-        has_pool : bool-like
+        has_pool : bool
             Do not require ``pool`` from the command line if a pool is already in hand.
         """
         if args is None:
@@ -386,9 +386,9 @@ class Main:
 
 def main(args=None, pool=None):
     """
-    Command-line entrypoint for the association generator.
+    Command-line entry-point for the association generator.
 
-    Wrapper around `Main.cli` so that the return is either True or an exception.
+    Wrapper around :meth:`Main.cli` so that the return is either `True` or an exception.
 
     Parameters
     ----------
@@ -396,8 +396,8 @@ def main(args=None, pool=None):
         The command line arguments. Can be one of:
 
         - `None`: ``sys.argv`` is then used.
-        - List of str: A list of strings which create the command line
-          with the similar structure as ``sys.argv``
+        - A list of strings which create the command line
+          with the similar structure as ``sys.argv``.
 
     pool : None or `~jwst.associations.pool.AssociationPool`
         If `None`, a pool file must be specified in the ``args``.
