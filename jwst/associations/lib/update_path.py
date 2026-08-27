@@ -33,13 +33,13 @@ def update_key_value(obj, target, func_args, mod_func=None):
         The target key to modify.
     func_args : tuple
         Arguments to pass to the modification function.
-    mod_func : function
+    mod_func : function or None
         Function to modify the target key with. If `None`,
         the key will be replaced by the arguments list.
 
     Notes
     -----
-    The first argument to ``mod_func`` will always be the value of the
+    The first argument to ``mod_func`` function will always be the value of the
     target key. Any other arguments given will then be passed to the
     the function.
     """

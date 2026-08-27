@@ -103,7 +103,7 @@ def filter_discovered_only(
     Returns
     -------
     iterable
-        The new list of just cross candidate associations.
+        The new list of only the cross-candidate associations.
 
     Notes
     -----
@@ -158,7 +158,7 @@ def getattr_from_list(adict, attributes, invalid_values=None):
 
     Returns
     -------
-    (attribute, value)
+    attribute, value : obj
         Returns the value and the attribute from
         which the value was taken.
 
@@ -194,7 +194,7 @@ def return_on_exception(exceptions=(Exception,), default=None):
 
     Parameters
     ----------
-    exceptions : (Exception(,...))
+    exceptions : tuple of `Exception`
         Tuple of exceptions to catch.
 
     default : obj
@@ -235,12 +235,12 @@ def getattr_from_list_nofail(*args, **kwargs):
 
     Parameters
     ----------
-    *args, **kwargs : dicts
-        Arguments passed to getattr_from_list.
+    *args, **kwargs
+        Arguments passed to :func:`getattr_from_list`.
 
     Returns
     -------
-    (attribute, value)
+    attribute, value : obj
         Returns the value and the attribute from
         which the value was taken.
 
@@ -258,7 +258,7 @@ def is_iterable(obj):
 
     Parameters
     ----------
-    obj : object
+    obj : obj
         The object to be checked for defined ``__iter__`` method.
 
     Returns
