@@ -1,4 +1,4 @@
-"""Association Member for storing exposure metadata as dict-like objects."""
+"""Association member for storing exposure metadata as dict-like objects."""
 
 from collections import UserDict
 from copy import copy
@@ -43,7 +43,7 @@ class Member(UserDict):
         """
         Compare members.
 
-        If both Members have attributes ``expname`` and ``exptype``,
+        If both members have attributes ``expname`` and ``exptype``,
         compare only those attributes. Otherwise, use the default
         comparison.
 

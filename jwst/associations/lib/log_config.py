@@ -143,15 +143,15 @@ def log_config(name=None, user_name=None, logger_config=None, config=None, merge
         as ``name``.
 
     logger_config : dict
-        The dict to use to setup the logger. This is used
+        The dictionary to use to set up the logger. This is used
         as the value to the key of ``name``.
 
     config : dict
-        User-specified logging configuration as specified by
+        User-specified logging configuration.
 
     merge : bool
-        Merge the user-specified config in with base configuration.
-        If `False`, just use the user-specified config.
+        Merge the user-specified configuration in with base configuration.
+        If `False`, just use the user-specified one.
 
     Returns
     -------
