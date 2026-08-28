@@ -54,9 +54,9 @@ class LoadAsAssociation(dict):
         Parameters
         ----------
         obj : `~jwst.associations.association.Association`, str, dict, \
-              `~stdatamodels.jwst.datamodels.JwstDatamodel`, \
+              `~stdatamodels.jwst.datamodels.JwstDataModel`, \
               list of str, or \
-              list of `~stdatamodels.jwst.datamodels.JwstDatamodel`
+              list of `~stdatamodels.jwst.datamodels.JwstDataModel`
             The object to return as an association.
 
         meta : dict or None
