@@ -1,5 +1,6 @@
 import logging
 import warnings
+from collections import defaultdict
 
 import numpy as np
 from stdatamodels.jwst import datamodels
@@ -10,19 +11,8 @@ from jwst.extract_1d.spec_wcs import create_spectral_wcs
 
 log = logging.getLogger(__name__)
 
-
-# attributes that we want to copy unmodified from input to output spectra
-SPECMETA_ATTRIBUTES = [
-    "source_id",
-    "dispersion_direction",
-    "source_type",
-    "source_ra",
-    "source_dec",
-]
-
 __all__ = [
     "InputSpectrumModel",
-    "inputlist_from_multispec",
     "OutputSpectrumModel",
     "count_input",
     "compute_output_wl",
@@ -124,81 +114,6 @@ class InputSpectrumModel:
         self.dispersion_direction = 0
         self.contam_flux = None
         self.contam_surf_bright = None
-
-
-def inputlist_from_multispec(ms, spec, exptime_key):
-    """
-    Parameters
-    ----------
-    ms : `~stdatamodels.jwst.datamodels.JwstDataModel`, \
-         `~stdatamodels.jwst.datamodels.MultiSpecModel`, or \
-         `~stdatamodels.jwst.datamodels.SpecModel`
-        This is used to get the integration time.
-
-    spec : `~stdatamodels.jwst.datamodels.JwstDataModel` or \
-           `~stdatamodels.jwst.datamodels.SpecModel` table
-        The table containing columns "wavelength" and "flux".
-        The ``ms`` object may contain more than one spectrum, but ``spec``
-        should be just one of those.
-
-    exptime_key : str
-        A string identifying which keyword to use to get the exposure
-        time, which is used as a weight; or "unit_weight", which means
-        to use ``weight = 1``.
-
-    Returns
-    -------
-    inputlist : list of `InputSpectrumModel`
-        List of input spectra to comebine.
-    """
-    wavelength = spec.spec_table.field("wavelength")
-    flux = spec.spec_table.field("flux")
-    flux_error = spec.spec_table.field("flux_error")
-    flux_unit = spec.spec_table.columns["flux"].unit
-    surf_bright = spec.spec_table.field("surf_bright")
-    sb_unit = spec.spec_table.columns["surf_bright"].unit
-    sb_error = spec.spec_table.field("sb_error")
-    dq = spec.spec_table.field("dq")
-
-    unit_weight = False
-    weight = np.ones_like(wavelength)
-    if exptime_key == "integration_time":
-        weight *= ms.meta.exposure.integration_time
-    elif exptime_key == "exposure_time":
-        weight *= ms.meta.exposure.exposure_time
-    else:  # "unit_weight" (validity already checked elsewhere)
-        unit_weight = True
-
-    right_ascension = np.zeros_like(wavelength)
-    declination = np.zeros_like(wavelength)
-    try:
-        right_ascension[:], declination[:] = spec.meta.wcs(0.0)[:2]
-    except AttributeError:
-        right_ascension[:] = ms.meta.target.ra
-        declination[:] = ms.meta.target.dec
-        # This exception is hit for NIRISS and NIRCam WFSS data,
-        # for which it doesn't matter anyway, since the RA and Dec are not used
-        # in any meaningful way to combine the spectra. A future refactor should
-        # make it so the WCS is not expected in the input spectra for those modes.
-        log.debug("There is no WCS in the input. Getting RA, Dec from target metadata.")
-
-    name = spec.name
-
-    # FIXME!!!
-    for attr in SPECMETA_ATTRIBUTES:
-        setattr(self, attr, getattr(spec, attr))
-
-    # Flag to indicate the contamination columns are present, i.e., this is a WFSS mode.
-    # contam_flux and contam_surf_bright are present for WFSS modes
-    has_contam = "contam_flux" in spec.spec_table.columns
-    if has_contam:
-        contam_flux = spec.spec_table.field("contam_flux")
-        contam_surf_bright = spec.spec_table.field("contam_surf_bright")
-    else:
-        contam_flux = None
-        contam_surf_bright = None
-
-    return [InputSpectrumModel(wavelength, flux, flux_error, flux_unit, surf_bright, sb_error, sb_unit, dq, weight, unit_weight, right_ascension, declination, name, source_id, source_type, source_ra, source_dec, dispersion_direction, contam_flux=contam_flux, contam_surf_bright=contam_surf_bright)]
 
 
 class OutputSpectrumModel:
@@ -839,43 +754,144 @@ def check_exptime(exptime_key):
     return exptime_key
 
 
+def _inputspectra_from_multispec(ms, exptime_key, input_spectra):
+    """
+    Build input spectra from regular multispec model.
+
+    Parameters
+    ----------
+    ms : `~stdatamodels.jwst.datamodels.MultiSpecModel`, \
+         `~stdatamodels.jwst.datamodels.MRSMultiSpecModel`, or \
+         `~stdatamodels.jwst.datamodels.SpecModel`
+        Data model to read. This can contain multiple spectra.
+
+    exptime_key : str
+        A string identifying which keyword to use to get the exposure
+        time, which is used as a weight; or "unit_weight", which means
+        to use ``weight = 1``.
+
+    input_spectra : defaultdict
+        Dictionary to hold input spectra, keyed by spectral order
+        and values are stored in one list per key;
+        Updated in-place.
+    """
+    if not hasattr(input_model, "spec"):
+        return
+
+    unit_weight = False
+    weight = np.ones_like(wavelength)
+    if exptime_key == "integration_time":
+        weight *= ms.meta.exposure.integration_time
+    elif exptime_key == "exposure_time":
+        weight *= ms.meta.exposure.exposure_time
+    else:  # "unit_weight" (validity already checked elsewhere)
+        unit_weight = True
+
+    targ_ra = ms.meta.target.ra
+    targ_dec = ms.meta.target.dec
+
+    for in_spec in input_model.spec:
+        name = spec.name
+        spectral_order = in_spec.spectral_order
+        source_id = spec.source_id
+        source_type = spec.source_type
+        source_ra = spec.source_ra
+        source_dec = spec.source_dec
+        dispersion_direction = spec.dispersion_direction
+
+        wavelength = spec.spec_table.field("wavelength")
+        monotonic = check_monotonic(wavelength)
+        if not monotonic:
+            log.warning(
+                "Input spectrum %d order %d has does not have monotonic wavelengths; skipping.",
+                source_id, spectral_order
+            )
+            continue
+
+        flux = spec.spec_table.field("flux")
+        if not np.any(np.isfinite(flux)):
+            if spec.meta.hasattr("group_id"):
+                log.warning(
+                    "Input spectrum %d order %d from group_id %s has no valid flux values; skipping.", source_id, spectral_order, spec.meta.group_id
+                )
+            else:
+                log.warning(
+                    "Input spectrum %d order %d has no valid flux values; skipping.", source_id, spectral_order
+                )
+            continue
+
+        flux_error = spec.spec_table.field("flux_error")
+        flux_unit = spec.spec_table.columns["flux"].unit
+        surf_bright = spec.spec_table.field("surf_bright")
+        sb_unit = spec.spec_table.columns["surf_bright"].unit
+        sb_error = spec.spec_table.field("sb_error")
+        dq = spec.spec_table.field("dq")
+
+        right_ascension = np.zeros_like(wavelength)
+        declination = np.zeros_like(wavelength)
+        try:
+            right_ascension[:], declination[:] = spec.meta.wcs(0.0)[:2]
+        except AttributeError:
+            right_ascension[:] = targ_ra
+            declination[:] = targ_dec
+            # This exception is hit for NIRISS and NIRCam WFSS data,
+            # for which it doesn't matter anyway, since the RA and Dec are not used
+            # in any meaningful way to combine the spectra. A future refactor should
+            # make it so the WCS is not expected in the input spectra for those modes.
+            log.debug("There is no WCS in the input. Getting RA, Dec from target metadata.")
+
+        # Flag to indicate the contamination columns are present,
+        # i.e., this is a WFSS mode.
+        has_contam = "contam_flux" in spec.spec_table.columns
+        if has_contam:
+            contam_flux = spec.spec_table.field("contam_flux")
+            contam_surf_bright = spec.spec_table.field("contam_surf_bright")
+        else:
+            contam_flux = None
+            contam_surf_bright = None
+
+        input_spectra[spectral_order].appendInputSpectrumModel(wavelength, flux, flux_error, flux_unit, surf_bright, sb_error, sb_unit, dq, weight, unit_weight, right_ascension, declination, name, source_id, source_type, source_ra, source_dec, dispersion_direction, contam_flux=contam_flux, contam_surf_bright=contam_surf_bright))
+
+
+def _inputspectra_from_tso(ms, exptime_key, input_spectra):
+    # FIXME
+    pass
+
+
 def _read_input_spectra(input_model, exptime_key, input_spectra):
     """
     Read input spectra from a datamodel.
+
+    If the input datamodel does not have a ``spec`` attribute,
+    it is skipped.
 
     Parameters
     ----------
     input_model : `~stdatamodels.jwst.datamodels.MultiSpecModel`, \
                   `~stdatamodels.jwst.datamodels.TSOMultiSpecModel`, or \
-                  `~stdatamodels.jwst.datamodels.MRSSpecModel`
+                  `~stdatamodels.jwst.datamodels.MRSMultiSpecModel`
         A datamodel with a ``spec`` attribute, containing spectra.
         If `~stdatamodels.jwst.datamodels.TSOMultiSpecModel`,
         integrations in the spectral table rows
         are expanded into separate spectra.
     exptime_key : str
         Exposure time key to use for weighting.
-    input_spectra : dict
-        Dictionary to hold input spectra, keyed by spectral order;
-        Updated in place.
+    input_spectra : defaultdict
+        Dictionary to hold input spectra, keyed by spectral order
+        and values are stored in one list per key;
+        Updated in-place.
 
-    Returns
-    -------
-    input_spectra : dict
-        The updated dictionary, holding all spectra in the input model.
-
-    Raises
-    ------
-    TypeError
-        If the input datamodel does not have a ``spec`` attribute.
     """
-    # FIXME: Use inputlist_from_multispec
-
-    if not hasattr(input_model, "spec"):
-        raise TypeError(f"Invalid input datamodel: {type(input_model)}")
     if isinstance(input_model, datamodels.TSOMultiSpecModel):
+        #_inputspectra_from_tso(input_model, exptime_key, input_spectra)
+        if not hasattr(input_model, "spec"):
+            return
         spectra = expand_flat_spec(input_model).spec
     else:
-        spectra = input_model.spec
+        _inputspectra_from_multispec(input_model, exptime_key, input_spectra)
+        return
+
+    # FIXME
     for in_spec in spectra:
         if not np.any(np.isfinite(in_spec.spec_table.field("flux"))):
             if in_spec.meta.hasattr("group_id"):
@@ -900,10 +916,7 @@ def _read_input_spectra(input_model, exptime_key, input_spectra):
             continue
 
         spectral_order = in_spec.spectral_order
-        if spectral_order not in input_spectra:
-            input_spectra[spectral_order] = []
         input_spectra[spectral_order].append(InputSpectrumModel(input_model, in_spec, exptime_key))
-    return input_spectra
 
 
 def combine_1d_spectra(input_model, exptime_key, sigma_clip=None):
@@ -936,7 +949,7 @@ def combine_1d_spectra(input_model, exptime_key, sigma_clip=None):
 
     exptime_key = check_exptime(exptime_key)
 
-    input_spectra = {}
+    input_spectra = defaultdict(list)
     output_spectra = {}
     if isinstance(input_model, ModelContainer):
         for ms in input_model:
@@ -959,8 +972,14 @@ def combine_1d_spectra(input_model, exptime_key, sigma_clip=None):
     for order in output_spectra:
         output_order = output_spectra[order].create_output_data()
         output_order.spectral_order = order
-        for attr in SPECMETA_ATTRIBUTES:
-            setattr(output_order, attr, getattr(input_spectra[order][0], attr))
+
+        # attributes that we want to copy unmodified from input to output spectra
+        output_order.source_id = input_spectra[order][0].source_id
+        output_order.source_type = input_spectra[order][0].source_type
+        output_order.source_ra = input_spectra[order][0].source_ra
+        output_order.source_dec = input_spectra[order][0].source_dec
+        output_order.dispersion_direction = input_spectra[order][0].dispersion_direction
+
         output_model.spec.append(output_order)
 
     # Copy one of the input headers to output.
